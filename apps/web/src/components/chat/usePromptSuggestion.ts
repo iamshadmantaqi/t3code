@@ -29,6 +29,7 @@ export function offeredPromptSuggestion<Suggestion extends { readonly runId: Run
   suggestion: Suggestion | null | undefined,
   latestRun: Thread["latestRun"] | undefined,
   runs: ReadonlyArray<OrchestrationV2Run>,
+  waitingOnBackgroundWork: boolean,
 ): Suggestion | null {
   const run = announcedRun(latestRun ?? null, runs);
   const skippedUnseenRun =
@@ -41,6 +42,7 @@ export function offeredPromptSuggestion<Suggestion extends { readonly runId: Run
         candidate.startedAt === null,
     );
   return suggestion &&
+    !waitingOnBackgroundWork &&
     !skippedUnseenRun &&
     run?.runId === suggestion.runId &&
     run.status === "completed"
@@ -64,6 +66,7 @@ export function usePromptSuggestion(
   environmentId: EnvironmentId,
   thread: Thread | undefined,
   runs: ReadonlyArray<OrchestrationV2Run>,
+  waitingOnBackgroundWork: boolean,
 ): { readonly suggestion: string | null; readonly dismiss: () => void } {
   // Older servers decode the missing setting as false, so true also proves the method exists.
   const enabled = useServerConfigs().get(environmentId)?.settings.promptSuggestionsEnabled === true;
@@ -79,7 +82,7 @@ export function usePromptSuggestion(
       : null,
   );
   const dismissed = useSyncExternalStore(subscribeDismissed, readDismissed);
-  const offered = offeredPromptSuggestion(data, thread?.latestRun, runs);
+  const offered = offeredPromptSuggestion(data, thread?.latestRun, runs, waitingOnBackgroundWork);
   return {
     suggestion:
       offered && !dismissed.has(dismissKey(environmentId, offered.runId)) ? offered.text : null,
