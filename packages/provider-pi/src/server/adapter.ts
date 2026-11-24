@@ -71,7 +71,7 @@ import {
   piRecordNumber as recordNumber,
   piRecordString as recordString,
   type PiRpcConnection,
-  type PiRpcError,
+  PiRpcError,
   type PiRpcRecord,
 } from "./rpc.ts";
 import {
@@ -97,6 +97,7 @@ const PI_SESSION_TIMEOUT_MS = 60_000;
 const MAX_EXTENSION_STATUSES = 32;
 const MAX_EXTENSION_STATUS_KEY_LENGTH = 256;
 const MAX_EXTENSION_STATUS_TEXT_LENGTH = 4096;
+const isPiRpcError = Schema.is(PiRpcError);
 const PI_UNSOLICITED_ACTIVITY_ERROR =
   "Pi started agent work outside an active T3 turn. The session was stopped to prevent invisible tool execution.";
 const SETTLE_PROBE_MAX_ATTEMPTS = 3;
@@ -2883,6 +2884,22 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             Effect.gen(function* () {
               runtimeRetired = true;
               const state = threadState;
+              const error = Cause.squash(cause);
+              // Pi exits 143 on SIGTERM and 129 on SIGHUP after a clean shutdown.
+              const idleExit =
+                state !== null &&
+                state.activeTurn === null &&
+                pendingPrompts.size === 0 &&
+                heldPrompts.length === 0 &&
+                pendingPromptResponses.length === 0 &&
+                pendingCompactResponses.length === 0 &&
+                !nativeCompacting &&
+                rollbackBarrier === null &&
+                extensionStatusReset === null &&
+                pendingWake === null &&
+                piAsyncRuns.size === 0 &&
+                isPiRpcError(error) &&
+                (error.exitCode === 0 || error.exitCode === 129 || error.exitCode === 143);
               closed = true;
               if (pendingPromptResponsesDrained !== null)
                 yield* Deferred.fail(
@@ -2916,7 +2933,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
               if (unsolicitedActivityDetected) {
                 yield* updateProviderSession("error", PI_UNSOLICITED_ACTIVITY_ERROR);
                 yield* Queue.end(events);
-              } else if (stopRequested) {
+              } else if (stopRequested || idleExit) {
                 yield* updateProviderSession("stopped", null);
                 yield* Queue.end(events);
               } else {

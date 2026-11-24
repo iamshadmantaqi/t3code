@@ -24,6 +24,7 @@ import { signalProcessGroup } from "@t3tools/provider-core/server/processGroup";
 export class PiRpcError extends Schema.TaggedError<PiRpcError>()("PiRpcError", {
   operation: Schema.String,
   detail: Schema.optional(Schema.String),
+  exitCode: Schema.optional(Schema.Number),
   cause: Schema.optional(Schema.Defect()),
 }) {
   override get message(): string {
@@ -394,12 +395,12 @@ export const makePiRpcConnection = Effect.fnUntraced(function* (options: PiRpcSp
               Effect.provideService(Clock.Clock, Clock.Clock.defaultValue()),
               Effect.orElseSucceed(() => Option.none<number>()),
             );
+        const exitCode = Option.getOrUndefined(maybeExitCode);
         return yield* failTransport(
           new PiRpcError({
             operation: "read",
-            detail: describePiStdoutClosure(
-              Option.isSome(maybeExitCode) ? maybeExitCode.value : undefined,
-            ),
+            detail: describePiStdoutClosure(exitCode),
+            ...(exitCode === undefined ? {} : { exitCode }),
           }),
         );
       }),
