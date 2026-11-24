@@ -121,6 +121,42 @@ it.layer(NodeServices.layer)("discoverAntigravitySkills", (it) => {
     }),
   );
 
+  it.effect("labels plugin skills with their plugin name and keeps the native name", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const input = yield* makeWorkspace();
+      const userSkillPath = yield* writeSkill(
+        path.join(input.userHome, ".gemini", "config", "skills", "review"),
+        "---\nname: review\n---\n",
+      );
+      const skills = path.join(input.profileDirectory, "config", "plugins", "t3-pstack", "skills");
+      const broPath = yield* writeSkill(path.join(skills, "bro"), "---\nname: bro\n---\n");
+      const prefixedPath = yield* writeSkill(
+        path.join(skills, "arena"),
+        "---\nname: t3-pstack:arena\n---\n",
+      );
+      yield* writeSkill(path.join(skills, "review"), "---\nname: review\n---\n");
+
+      assert.deepEqual(yield* discoverAntigravitySkills(input), [
+        {
+          name: "bro",
+          displayName: "t3-pstack:bro",
+          path: broPath,
+          scope: "user",
+          enabled: true,
+        },
+        { name: "review", path: userSkillPath, scope: "user", enabled: true },
+        {
+          name: "t3-pstack:arena",
+          displayName: "t3-pstack:arena",
+          path: prefixedPath,
+          scope: "user",
+          enabled: true,
+        },
+      ]);
+    }),
+  );
+
   it.effect("uses native root order for duplicate names", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
