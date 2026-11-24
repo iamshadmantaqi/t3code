@@ -201,6 +201,7 @@ interface FakePi {
       | "unknown_command",
   ) => void;
   readonly closeStdout: Effect.Effect<void>;
+  readonly failStdout: Effect.Effect<void>;
   readonly lastSpawn: () => {
     readonly args: ReadonlyArray<string>;
     readonly env: NonNullable<ChildProcess.CommandOptions["env"]>;
@@ -520,6 +521,9 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
       clearQueue = result;
     },
     closeStdout: Queue.end(stdout),
+    failStdout: Queue.failCause(stdout, Cause.die(new Error("stdout read failed"))).pipe(
+      Effect.asVoid,
+    ),
     lastSpawn: () => lastSpawn,
   } satisfies FakePi;
 });
@@ -1022,6 +1026,82 @@ describe("PiAdapterV2", () => {
           { key: "startup", text: "Fresh status" },
         ]);
       }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect.each([
+    { exit: "SIGTERM while idle", exitCode: 143, turn: false, quiet: true },
+    { exit: "code 0 while idle", exitCode: 0, turn: false, quiet: true },
+    { exit: "code 1 while idle", exitCode: 1, turn: false, quiet: false },
+    { exit: "a stdout failure while idle", exitCode: 143, turn: false, quiet: false },
+    { exit: "SIGTERM during a turn", exitCode: 143, turn: true, quiet: false },
+  ] as const)("reports a Pi exit on $exit", ({ exit, exitCode, turn, quiet }) =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakePi;
+      const exited = yield* Deferred.make<ChildProcessSpawner.ExitCode>();
+      const adapter = yield* makeAdapter({
+        ...fake,
+        spawner: ChildProcessSpawner.make((command) =>
+          fake.spawner
+            .spawn(command)
+            .pipe(
+              Effect.map((child) =>
+                ChildProcessSpawner.makeHandle({ ...child, exitCode: Deferred.await(exited) }),
+              ),
+            ),
+        ),
+      });
+      const runtime = yield* adapter.openSession({
+        threadId: THREAD_ID,
+        providerSessionId: SESSION_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      const events = yield* Queue.unbounded<ProviderAdapter.ProviderAdapterV2Event>();
+      const drained = yield* runtime.events.pipe(
+        Stream.runForEach((event) => Queue.offer(events, event)),
+        Effect.exit,
+        Effect.forkScoped,
+      );
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      if (turn) {
+        yield* startTurn(runtime, providerThread);
+        let started = false;
+        while (!started) started = (yield* Queue.take(events)).type === "provider_turn.updated";
+      }
+      yield* Deferred.succeed(exited, ChildProcessSpawner.ExitCode(exitCode));
+      if (exit === "a stdout failure while idle") yield* fake.failStdout;
+      else yield* fake.closeStdout;
+      const streamExit = yield* Fiber.join(drained);
+      const sessions = (yield* Queue.takeAll(events)).flatMap((event) =>
+        event.type === "provider_session.updated"
+          ? [[event.providerSession.status, event.providerSession.lastError]]
+          : [],
+      );
+      assert.deepStrictEqual(
+        sessions,
+        quiet
+          ? [["stopped", null]]
+          : [
+              ...(turn
+                ? [
+                    ["running", null],
+                    ["error", "Pi process exited unexpectedly."],
+                  ]
+                : []),
+              ["error", "Pi process exited unexpectedly."],
+            ],
+      );
+      assert.strictEqual(
+        Exit.isSuccess(streamExit) ? "ended" : String(Cause.squash(streamExit.cause)),
+        quiet
+          ? "ended"
+          : "ProviderAdapterEventStreamError: Failed while streaming pi provider session provider-session-pi-test events.",
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
   it.effect.each(["stop", "transport death"] as const)(
