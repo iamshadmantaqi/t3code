@@ -249,6 +249,48 @@ describe("GuestPage", () => {
     await expect.element(screen.getByLabelText("Model: GPT-5.4")).toBeVisible();
   });
 
+  it("keeps an MCP app's tool call but leaves out the app, which a guest cannot load", async () => {
+    using _page = visit(`/guest?share=${SHARE_ID}`);
+    using _session = vi
+      .spyOn(window, "fetch")
+      .mockImplementation(async () => new Response(null, { status: 204 }));
+    // Its own run, so the fold starts closed whatever an earlier test opened.
+    const appItems: ReadonlyArray<OrchestrationV2TurnItem> = [
+      { ...items[0]!, runId: RunId.make("run-app") },
+      {
+        ...itemBase("weather", 1, "run-app"),
+        type: "dynamic_tool",
+        toolName: "mcp__weather__get_weather",
+        title: "Get weather",
+        input: null,
+        output: {
+          t3McpApp: {
+            attachmentId: "thread-a-2",
+            server: "weather",
+            tool: "get_weather",
+            resourceUri: "ui://weather/dashboard",
+          },
+        },
+      },
+      reply("reply", 2, "It is sunny.", "run-app"),
+    ];
+    using _stream = vi
+      .spyOn(window, "EventSource")
+      .mockImplementation(
+        fakeEventSource(opening([run("run-app", 1, "completed")], appItems)) as never,
+      );
+    const container = document.createElement("div");
+    container.style.cssText = "height: 900px; width: 900px; display: flex; flex-direction: column;";
+    await using screen = await render(<GuestPage />, { container });
+
+    await expect.element(screen.getByText("It is sunny.")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /Worked for/ }));
+    await expect.element(screen.getByText("Get weather")).toBeVisible();
+    // The app's assets live on the owner's environment, which a guest cannot reach.
+    expect(screen.container.querySelector('[data-timeline-row-kind="mcp-app"]')).toBeNull();
+    expect(screen.container.textContent).not.toContain("Unable to load the weather app");
+  });
+
   it("sends attached files with the message, as form data", async () => {
     using _page = visit(`/guest?share=${SHARE_ID}`);
     using fetchSpy = vi
