@@ -39,6 +39,7 @@ import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useContext, useState, type ReactNode } from "react";
 
 import { RefreshIcon } from "~/components/ui/refresh-icon";
+import { useOpenLink } from "~/browser/useOpenLink";
 import { m } from "~/i18n/messages";
 import { issueEnvironment, refreshIssueLists } from "~/state/issues";
 import { useProjects } from "~/state/entities";
@@ -447,6 +448,7 @@ export function IssueDetailPanel({
   const [titleDraft, setTitleDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [changingState, setChangingState] = useState(false);
+  const openLink = useOpenLink(threadRef);
 
   if (detail === null) {
     if (detailQuery.error !== null && !detailQuery.isPending) {
@@ -618,6 +620,17 @@ export function IssueDetailPanel({
                 provider: tracker.providerName,
               })}
               render={<a href={detail.url} target="_blank" rel="noopener noreferrer" />}
+              // In a thread, the number follows Settings > Browser like the pull request panel's.
+              onClick={(event) => {
+                if (!threadRef) return;
+                event.preventDefault();
+                void openLink(detail.url, { event }).catch(console.error);
+              }}
+              onAuxClick={(event) => {
+                if (!threadRef || event.button !== 1) return;
+                event.preventDefault();
+                void openLink(detail.url, { event }).catch(console.error);
+              }}
             >
               {detail.displayKey}
               <ExternalLinkIcon aria-hidden className="size-2.5" />
