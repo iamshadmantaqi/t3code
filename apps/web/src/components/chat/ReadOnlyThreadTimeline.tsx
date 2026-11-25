@@ -51,6 +51,11 @@ export function ReadOnlyThreadTimeline(props: {
   readonly onImageExpand: (preview: ExpandedImagePreview) => void;
   readonly onFileOpen: (file: ChatFileAttachment) => void;
   readonly renderHtmlRender: (row: Extract<TimelineRow, { kind: "html-render" }>) => ReactNode;
+  /**
+   * Draws what stands in for an MCP App, which loads from the thread's environment and so cannot
+   * load here. `null` leaves the app out.
+   */
+  readonly renderMcpApp: ((row: Extract<TimelineRow, { kind: "mcp-app" }>) => ReactNode) | null;
   readonly renderFooter?: (items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>) => ReactNode;
   /** What stands below the timeline, where the composer would. */
   readonly children: (controls: { readonly scrollToEnd: () => void }) => ReactNode;
@@ -113,6 +118,7 @@ export function ReadOnlyThreadTimeline(props: {
             onFileOpen={props.onFileOpen}
             onFileDownload={props.onFileOpen}
             renderHtmlRender={props.renderHtmlRender}
+            renderMcpApp={props.renderMcpApp}
             turnItemSource={props.turnItemSource}
             historyControls={props.historyControls}
             activeThreadEnvironmentId={NO_ENVIRONMENT_ID}

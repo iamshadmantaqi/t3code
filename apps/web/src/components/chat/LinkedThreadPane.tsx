@@ -159,7 +159,7 @@ export function LinkedThread(props: {
     </AlertAction>
   ) : null;
   // A file or visual lives on the linked environment, which this client has no way to ask.
-  const renderHtmlRender = useStableCallback(() => (
+  const renderVisual = useStableCallback(() => (
     <p className="chat-content-lane text-xs text-muted-foreground">
       {gt("Open this thread on {label} to see this visual.", { label })}
     </p>
@@ -224,7 +224,8 @@ export function LinkedThread(props: {
           attachmentUrls={noAttachmentUrls}
           onImageExpand={ignore}
           onFileOpen={ignore}
-          renderHtmlRender={renderHtmlRender}
+          renderHtmlRender={renderVisual}
+          renderMcpApp={renderVisual}
         >
           {() => (
             <>

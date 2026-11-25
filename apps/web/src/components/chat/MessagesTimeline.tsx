@@ -288,6 +288,8 @@ interface MessagesTimelineProps {
     intent?: SideThreadOpenIntent,
   ) => void;
   renderHtmlRender?: TimelineRowSharedState["renderHtmlRender"];
+  /** `null` leaves MCP App cards out, for a reader with no way to load them. */
+  renderMcpApp?: TimelineRowSharedState["renderMcpApp"] | null;
   turnItemSource?: TimelineRowSharedState["turnItemSource"];
   /**
    * The thread this one is a subagent or side chat of; `open` is absent when it cannot be
@@ -407,6 +409,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   onOpenToolDiff,
   onOpenThread,
   renderHtmlRender,
+  renderMcpApp,
   turnItemSource,
   parentThreadLink = null,
   workflowOpening = null,
@@ -781,7 +784,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
     toolCallVisibility,
     revealedMessageId,
   });
-  const rows = useStableRows(rawRows, listIdentityKey);
+  const rows = useStableRows(
+    renderMcpApp === null ? rawRows.filter((row) => row.kind !== "mcp-app") : rawRows,
+    listIdentityKey,
+  );
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =
@@ -1158,6 +1164,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     onOpenToolDiff,
     onOpenThread,
     renderHtmlRender,
+    renderMcpApp: renderMcpApp ?? undefined,
     turnItemSource,
     workflowOpening,
     onForkFromRun,

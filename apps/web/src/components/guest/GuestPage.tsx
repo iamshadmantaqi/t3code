@@ -442,6 +442,8 @@ function GuestThread({
           onImageExpand={openExpandedImage}
           onFileOpen={openFile}
           renderHtmlRender={renderHtmlRender}
+          // An app loads from the owner's environment, which a guest cannot reach.
+          renderMcpApp={null}
           renderFooter={(items) => {
             const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
             return unplaced.length === 0 ? null : (
