@@ -86,6 +86,19 @@ const make = Effect.gen(function* () {
       );
       roots.push(path.join(directories.profile, "antigravity-acp"));
     }
+    // Profiles of removed instances stay on disk; keep counting their history.
+    const profilesDir = path.join(host.paths.stateDir, "providers", "antigravity");
+    const profiles = yield* fileSystem
+      .readDirectory(profilesDir)
+      .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+    for (const profile of profiles) {
+      const acpDir = path.join(profilesDir, profile, "antigravity-acp");
+      const isDirectory = yield* fileSystem.stat(acpDir).pipe(
+        Effect.map((info) => info.type === "Directory"),
+        Effect.orElseSucceed(() => false),
+      );
+      if (isDirectory) roots.push(acpDir);
+    }
     const conversationDirs = new Set<string>();
     for (const root of roots) {
       const resolvedRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
